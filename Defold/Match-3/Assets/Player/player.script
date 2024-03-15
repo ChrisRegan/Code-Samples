@@ -1,0 +1,159 @@
+
+local xPos = {}
+local currentPos
+
+local actionsPressed ={}
+local actionsReleased={}
+local updateGrabbed = function() end
+local held = nil
+
+local function MoveLeft()
+	if currentPos == 1 then
+		return
+	end
+
+	currentPos = currentPos - 1 
+	-- move left
+	local pos = go.get_position()
+	pos.x = xPos[currentPos]
+	go.set_position(pos)
+	updateGrabbed()
+end
+
+local function MoveRight()
+	if currentPos == #xPos then
+		return
+	end
+
+	currentPos = currentPos + 1 
+	-- move right
+	local pos = go.get_position()
+	pos.x = xPos[currentPos]
+	go.set_position(pos)
+	updateGrabbed()
+end
+
+local function other(self, action_id, action)
+	msg.post("/Game Field#main", action_id, {currentPos, action, held})
+end
+
+
+function init(self)
+	-- Add initialization code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+	msg.post("/Game Field#main", "getStartPos")
+	msg.post(".", "acquire_input_focus")
+
+	actionsPressed[hash("MoveLeft")] = MoveLeft
+	actionsPressed[hash("MoveRight")] = MoveRight
+	actionsPressed[hash("SpeedUp")] = other
+	actionsPressed[hash("Swap")] = other
+	actionsPressed[hash("Grab")] = other
+	actionsReleased[hash("SpeedUp")] = other
+
+end
+
+function final(self)
+	-- Add finalization code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+end
+
+function update(self, dt)
+	-- Add update code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+end
+
+function fixed_update(self, dt)
+	-- This function is called if 'Fixed Update Frequency' is enabled in the Engine section of game.project
+	-- Can be coupled with fixed updates of the physics simulation if 'Use Fixed Timestep' is enabled in
+	-- Physics section of game.project
+	-- Add update code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+end
+
+function on_message(self, message_id, message, sender)
+	-- Add message-handling code here
+	-- Learn more: https://defold.com/manuals/message-passing/
+	-- Remove this function if not needed
+
+	if message_id == hash("Grabbed Tile") then
+		held = message[1]
+		if held == nil then
+			updateGrabbed = function() end
+		else 
+			updateGrabbed = function()
+				local pos = go.get_position()
+				pos['y'] = pos['y'] + 64
+				go.set_position(pos, held)
+			end
+			updateGrabbed()
+		end
+
+	elseif message_id == hash("returned Positions") then
+
+		-- Returns the block starting positions in order to center the player with the block in the closest column
+		--		and sets the player bounds to the number of columns added
+		
+		local tmp = {9999,9999}
+		
+		local pos = go.get_position()
+		for key, value in ipairs(message) do
+			local x = value["x"]			
+			xPos[key] = x
+
+			local res
+			if x > pos["x"] then
+				res = x - pos["x"]
+			else
+				res = pos["x"] - x
+			end
+
+			if res < tmp[2] then
+				tmp[1]= key
+				tmp[2]= res
+			end
+		end
+
+		pos["x"] = xPos[tmp[1]]
+		go.set_position(pos)
+
+		currentPos = tmp[1]
+
+		
+	end
+end
+
+
+
+function on_input(self, action_id, action)
+	-- Add input-handling code here. The game object this script is attached to
+	-- must have acquired input focus:
+	--
+	--    msg.post(".", "acquire_input_focus")
+	--
+	-- All mapped input bindings will be received. Mouse and touch input will
+	-- be received regardless of where on the screen it happened.
+	-- Learn more: https://defold.com/manuals/input/
+	-- Remove this function if not needed
+
+	if action.pressed then
+
+		if actionsPressed[action_id] ~= nil then
+			actionsPressed[action_id](self, action_id, action)
+		end
+	elseif action.released then
+		if actionsReleased[action_id] ~= nil then
+			actionsReleased[action_id](self, action_id, action)
+		end
+	end
+end
+
+function on_reload(self)
+	-- Add reload-handling code here
+	-- Learn more: https://defold.com/manuals/hot-reload/
+	-- Remove this function if not needed
+end

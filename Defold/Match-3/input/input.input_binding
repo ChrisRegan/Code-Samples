@@ -1,0 +1,20 @@
+key_trigger {
+  input: KEY_A
+  action: "MoveLeft"
+}
+key_trigger {
+  input: KEY_D
+  action: "MoveRight"
+}
+key_trigger {
+  input: KEY_S
+  action: "SpeedUp"
+}
+key_trigger {
+  input: KEY_J
+  action: "Grab"
+}
+key_trigger {
+  input: KEY_K
+  action: "Swap"
+}

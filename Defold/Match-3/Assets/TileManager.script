@@ -1,0 +1,440 @@
+local tileFactory = "#TileFactory"
+local rowPos = {
+	vmath.vector3(103,611, 1),
+	vmath.vector3(167,611, 1),
+	vmath.vector3(231,611, 1),
+	vmath.vector3(295,611, 1),
+	vmath.vector3(359,611, 1),
+	vmath.vector3(423,611, 1)
+}
+local updateState=function()end
+local gameState={}
+local numberRows = 8
+local speed = 200.0  --Max speed 200
+local spawnHeight = 547
+
+local timePassed = 0
+local moveDownTime
+local const_MoveDownTime = 0.6 -- Constant value to ensure that the base value can be reset when needed
+-- 2.6 4th beat of 100 bpm
+local grabbed = nil
+
+
+
+local messages = {}
+
+local function isGameOver()
+	if #gameState >= numberRows then
+		updateState = function()end
+	end
+end
+
+local function checkEmpty(rowNumber)
+	if tablelength(gameState[rowNumber]) == 0 then
+		table.remove(gameState, rowNumber)
+	end
+end
+
+local function shuffle(colors)
+	local shuffledTable = {}
+	while #colors > 0 do
+		local rand = math.random(#colors)
+		local color = colors[rand]
+		table.insert(shuffledTable, color)
+		table.remove(colors, rand)
+	end
+	return shuffledTable
+end
+
+local function NewColor (colors, tile)
+	local color = table.remove(colors)
+	msg.post(tile .. "#tileSprite", "play_animation", {id = hash(color)})
+end
+
+
+local function countNext(data, nextCount, dataName)
+	if data[dataName] ~= nil then
+		nextCount = countNext(data[dataName], nextCount + 1, dataName)
+	end
+	return nextCount
+end
+
+local function countColor(data)
+
+	return countNext(data, 0, "next") + countNext(data, 0, "prev") + 1
+
+end
+
+local function verifyTile(col, row)
+	
+	return gameState[row] ~= nil and gameState[row][col] ~= nil
+end
+
+local function insertTile(NewTile, otherTile)
+	NewTile["next"] = otherTile
+	NewTile["prev"] = otherTile["prev"]
+	otherTile["prev"] = NewTile
+end
+
+
+local function DisconnectTile(row, col)
+	local tileData = gameState[row][col]
+
+	if tileData["next"] ~= nil then
+		tileData["next"]["prev"] = tileData["prev"]
+	end
+
+	if tileData["prev"] ~= nil then
+		tileData["prev"]["next"] = tileData["next"]
+	end
+
+	tileData["next"] = nil
+	tileData["prev"] = nil
+end
+
+local function goToEnd(tileData, direction)
+	local endData = tileData;
+	if tileData[direction] ~= nil then
+		endData = goToEnd(tileData[direction])
+	end
+
+	return endData
+end
+
+
+local function isInHead(tileA, tileB, direction)
+	local found = false;
+
+	if tileA["tile"] == tileB["tile"] then
+		found = true
+	elseif tileA[direction] ~= nil then
+		found = isInHead(tileA[direction], tileB, direction)
+	end
+
+	return found
+		
+end
+
+local function inSameList(tileA, tileB)
+	local found = isInHead(tileA, tileB, "next")
+	if not found then
+		found = isInHead(tileA, tileB, "prev")
+	end
+
+	return found
+end
+
+local function CombineList(listA, listB)
+	if not inSameList(listA, listB) then
+		local tail = goToEnd(listA, "next")
+		local head = goToEnd(listB, "prev")
+
+		head["prev"] = tail
+		tail["next"] = head
+
+		return true	
+	end
+
+	return false
+end
+
+local function ConnectTile(row, col)
+	local tileData = gameState[row][col]
+	validTiles = {}
+
+	
+	if gameState[row-1] ~= nil and gameState[row-1][col] ~= nil and gameState[row-1][col]["color"] == tileData["color"] then
+		table.insert(validTiles, gameState[row-1][col])
+	end
+
+	if gameState[row+1] ~= nil and gameState[row+1][col] ~= nil and gameState[row+1][col]["color"] == tileData["color"] then
+		table.insert(validTiles, gameState[row+1][col])
+	end
+
+	if gameState[row][col-1] ~= nil and gameState[row][col-1]["color"] == tileData["color"] then
+		table.insert(validTiles, gameState[row][col-1])
+	end
+
+	if gameState[row][col+1] ~= nil and gameState[row][col+1]["color"] == tileData["color"] then
+		table.insert(validTiles, gameState[row][col+1])
+	end
+
+	table.insert(validTiles, tileData)
+
+	for i = 1, #validTiles - 1, 1 do
+		CombineList(validTiles[i], validTiles[i+1])
+	end
+
+end
+
+
+
+-- Collect the sum of all adjacent colors and return all colors that would not complete the color combo
+
+local function validColors()
+	local leftTile = gameState[1][#gameState[1] - 1]
+	local sumColors = {BlueTile = 0, GreenTile = 0, PurpleTile = 0, RedTile = 0, YellowTile = 0}
+
+	if leftTile then
+		sumColors[leftTile["color"]] = sumColors[leftTile["color"]] + countColor(leftTile)	
+	end
+	if gameState[2] ~= nil and gameState[2][#gameState[1]] then
+		local belowTile = gameState[2][#gameState[1]]
+
+		if belowTile then
+			sumColors[belowTile["color"]] = sumColors[belowTile["color"]] + countColor(belowTile)	
+		end
+	end	
+
+	local included = {}
+	for color, sum in pairs(sumColors) do
+		if sum < 2 then
+			table.insert(included, color)
+		end
+	end
+
+	return included
+end
+
+local function generateTile(self, pos)
+	local tile = factory.create(tileFactory, pos)
+	table.insert(gameState[1], {tile = tile, row = gameState[1]})
+	
+	local colors = shuffle(validColors())
+	local color = table.remove(colors)
+	gameState[1][#gameState[1]]["color"] = color
+	msg.post(tile, "play_animation", {id = hash(color)})
+	--countConnecting({#gameState[1], 1})
+
+	ConnectTile(1, #gameState[1])
+	
+	
+end
+
+local function spawnRow(self, tile)
+	local row={}
+	table.insert(gameState, 1, row)
+	
+	if gameState[2] == nil then
+
+		for colNum, pos in ipairs(rowPos) do
+			generateTile(self, pos)
+			--table.insert(row, generateTile(pos, #row))
+		end
+
+	else
+		for colNum, pos in ipairs(rowPos) do
+			pos['y'] = tile + 64
+			generateTile(self, pos)
+		end
+
+		isGameOver()
+	end
+end
+
+local function findTile(row)
+	local tile = nil
+	for key, value in pairs(row) do 
+		if value ~= nil then
+			tile = value
+			break
+		end
+	end
+	return tile
+end
+
+local function GamePlaying(self, dt)
+	-- Add update code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+
+	timePassed = timePassed + dt
+	
+	if timePassed >= moveDownTime then
+		timePassed = 0
+		
+		for rowNum, row in ipairs(gameState) do
+
+			for tileNum, tile in pairs(row) do
+				local pos = go.get_position(tile["tile"])
+				pos = pos - (vmath.vector3(0,1,0) * speed) * dt
+				go.set_position(pos, tile["tile"])
+			end
+		end
+
+		-- Check if first row
+
+		local tilePos = go.get_position(findTile(gameState[1])["tile"])['y']
+		if tilePos <= spawnHeight then
+			spawnRow(self, tilePos)
+		end
+	end
+end
+
+function tablelength(T)
+	local count = 0
+	for _ in pairs(T) do count = count + 1 end
+	return count
+end
+
+
+local function SpeedUp(self, message_id, message, sender)
+	if message[2].pressed then
+		speed = 150
+		moveDownTime = 0
+	elseif message[2].released then
+		speed = 200
+		moveDownTime = const_MoveDownTime
+	end
+end
+
+local function deleteDirection(node, direction)
+	if node[direction] ~= nil then
+		deleteDirection(node[direction], direction)
+	end
+
+	for key, value in pairs(node["row"]) do
+		if value["tile"] == node["tile"] then
+			go.delete(node["tile"])
+			table.remove(node["row"], key)
+			break
+		end
+	end
+end
+
+local function Grab(self, message_id, message, sender)
+
+	-- message = {playerPos, action, held TileID}
+	local playerPos = message[1] 
+	local tileTable = nil 		 -- {rowNumber, TileID}
+	local held = message[3]
+
+	-- Find the last row a tile is on.
+	local RowNumber = 0
+	for RowNumber = #gameState, 1, -1 do
+		local row = gameState[RowNumber]
+		if row[playerPos] ~= nil then
+			tileTable = {RowNumber, row[playerPos]}
+			break
+		end
+	end
+	
+	
+	if held == nil then
+		if tileTable ~= nil then
+			DisconnectTile(tileTable[1], playerPos)
+			grabbed = tileTable[2]
+			msg.post(sender, "Grabbed Tile", {tileTable[2]["tile"]})
+			gameState[tileTable[1]][playerPos] = nil
+			checkEmpty(tileTable[1])
+		end
+	else
+		local newPos = rowPos[playerPos]
+		if tileTable == nil then
+			-- Column is cleared.  Find a tile on the first row.
+			-- 		Should always be a tile on the first row.  Since new row should be spawned if board is cleared.
+			
+			tileTable = {1, findTile(gameState[1])}
+			newPos['y'] = go.get_position(tileTable[2]["tile"])['y']
+		else
+			local pos = go.get_position(tileTable[2]["tile"])
+			newPos['y'] = pos['y'] - 64
+			
+		end
+		
+		go.set_position(newPos, grabbed["tile"])
+
+
+
+		if gameState[tileTable[1]+1] == nil then
+			gameState[tileTable[1]+1] = {}
+		end
+		gameState[tileTable[1]+1][playerPos] = grabbed
+		gameState[tileTable[1]+1][playerPos]["row"] = gameState[tileTable[1]+1]
+		ConnectTile(tileTable[1]+1, playerPos)
+		if countColor(grabbed) > 3 then
+			if grabbed["prev"] ~= nil then
+				deleteDirection(grabbed["prev"], "prev")
+			end
+
+			deleteDirection(grabbed, "next")
+		end
+
+		msg.post(sender, "Grabbed Tile", {nil})
+		
+	end 
+end
+
+
+function init(self)
+	-- Add initialization code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+	--self.spawnColorList = {"BlueTile", "GreenTile", "PurpleTile", "RedTile", "YellowTile"}
+
+	math.randomseed(tonumber(hash_to_hex(hash(tostring({}))):sub(4, 8), 16))
+	messages[hash("SpeedUp")] = SpeedUp
+	messages[hash("getStartPos")] = function(self, message_id, message, sender) msg.post(sender, "returned Positions", rowPos) end
+	messages[hash("Grab")] = Grab
+	
+	
+	moveDownTime = const_MoveDownTime
+	updateState = GamePlaying
+	spawnRow(self)
+end
+
+function final(self)
+	-- Add finalization code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+end
+
+
+
+
+function update(self, dt)
+
+end
+
+function fixed_update(self, dt)
+	-- This function is called if 'Fixed Update Frequency' is enabled in the Engine section of game.project
+	-- Can be coupled with fixed updates of the physics simulation if 'Use Fixed Timestep' is enabled in
+	-- Physics section of game.project
+	-- Add update code here
+	-- Learn more: https://defold.com/manuals/script/
+	-- Remove this function if not needed
+
+	updateState(self, dt)
+end
+
+function on_message(self, message_id, message, sender)
+	-- Add message-handling code here
+	-- Learn more: https://defold.com/manuals/message-passing/
+	-- Remove this function if not needed
+
+	if messages[message_id] ~= nil then
+
+		-- Message recieved from the player script.  Usually when the player requests an interaction with a tile.
+		messages[message_id](self, message_id, message, sender)
+	end
+end
+
+function on_input(self, action_id, action)
+	-- Add input-handling code here. The game object this script is attached to
+	-- must have acquired input focus:
+	--
+	--    msg.post(".", "acquire_input_focus")
+	--
+	-- All mapped input bindings will be received. Mouse and touch input will
+	-- be received regardless of where on the screen it happened.
+	-- Learn more: https://defold.com/manuals/input/
+	-- Remove this function if not needed
+
+
+end
+
+function on_reload(self)
+	-- Add reload-handling code here
+	-- Learn more: https://defold.com/manuals/hot-reload/
+	-- Remove this function if not needed
+end
