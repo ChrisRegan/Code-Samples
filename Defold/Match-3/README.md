@@ -1,13 +1,18 @@
-# Welcome to Defold
+# Welcome to the Defold Match-3 game project
 
-This project was created from the "empty" project template.
+The game is in the Match-3 genere but the goal of the game is to match 4 or more tiles to score more points
 
-The settings in ["game.project"](defold://open?path=/game.project) are all the default. A bootstrap empty ["main.collection"](defold://open?path=/main/main.collection) is included.
+At the bottom of the screen is the user player.  
 
-Check out [the documentation pages](https://defold.com/learn) for examples, tutorials, manuals and API docs.
+A and D move the player left and right
+J grabs and drops the tile directly above the player.
+K swaps the adjacent blocks
+L rotates the cursor to swap horizontally or vertically
 
-If you run into trouble, help is available in [our forum](https://forum.defold.com).
+To Do:
 
-Happy Defolding!
-
----
+    Scoreing system
+    Block swapping 
+    Cursor
+    Cursor rotation
+    Tiles falling back next to the nearest block closest to the top of the screen.
