@@ -18,14 +18,32 @@ local moveDownTime
 local const_MoveDownTime = 0.6 -- Constant value to ensure that the base value can be reset when needed
 -- 2.6 4th beat of 100 bpm
 local grabbed = nil
+local tileHeight = 64
 
+local minTileMatch = 3
 
 
 local messages = {}
 
+local function verifyColRow(tileData)
+	if tileData == nil then
+		return
+	end
+
+	if tileData["rowNum"] then
+		pprint(tileData)
+	end
+
+	if tileData["colNum"] then
+		pprint(tileData)
+	end
+end
+
 local function isGameOver()
 	if #gameState >= numberRows then
 		updateState = function()end
+
+		pprint(gameState)
 	end
 end
 
@@ -65,17 +83,10 @@ local function countColor(data)
 
 end
 
-local function verifyTile(col, row)
+--[[local function verifyTile(col, row)
 	
 	return gameState[row] ~= nil and gameState[row][col] ~= nil
 end
-
-local function insertTile(NewTile, otherTile)
-	NewTile["next"] = otherTile
-	NewTile["prev"] = otherTile["prev"]
-	otherTile["prev"] = NewTile
-end
-
 
 local function DisconnectTile(row, col)
 	local tileData = gameState[row][col]
@@ -90,6 +101,8 @@ local function DisconnectTile(row, col)
 
 	tileData["next"] = nil
 	tileData["prev"] = nil
+	tileData["rowNum"] = nil
+	tileData["colNum"] = nil
 end
 
 local function goToEnd(tileData, direction)
@@ -140,8 +153,7 @@ end
 
 local function ConnectTile(row, col)
 	local tileData = gameState[row][col]
-	validTiles = {}
-
+	local validTiles = {tileData}
 	
 	if gameState[row-1] ~= nil and gameState[row-1][col] ~= nil and gameState[row-1][col]["color"] == tileData["color"] then
 		table.insert(validTiles, gameState[row-1][col])
@@ -159,13 +171,11 @@ local function ConnectTile(row, col)
 		table.insert(validTiles, gameState[row][col+1])
 	end
 
-	table.insert(validTiles, tileData)
-
 	for i = 1, #validTiles - 1, 1 do
 		CombineList(validTiles[i], validTiles[i+1])
 	end
 
-end
+end--]]
 
 
 
@@ -198,7 +208,7 @@ end
 
 local function generateTile(self, pos)
 	local tile = factory.create(tileFactory, pos)
-	table.insert(gameState[1], {tile = tile, row = gameState[1]})
+	table.insert(gameState[1], {tile = tile, rowNum = 1, colNum = #gameState[1]+1})
 	
 	local colors = shuffle(validColors())
 	local color = table.remove(colors)
@@ -206,9 +216,41 @@ local function generateTile(self, pos)
 	msg.post(tile, "play_animation", {id = hash(color)})
 	--countConnecting({#gameState[1], 1})
 
-	ConnectTile(1, #gameState[1])
+--	ConnectTile(1, #gameState[1])
 	
 	
+end
+
+local function checkConnections(tileData)
+
+	local row = tileData["rowNum"]
+	local col = tileData["colNum"]
+
+	local printNode = false
+	
+	if gameState[row] ~= nil and gameState[row][col+1] ~= nil and tileData["color"] == gameState[row][col+1]["color"] and not inSameList(tileData, gameState[row][col+1]) then
+		pprint("Error: right not in list")
+		printNode = true
+	end
+
+	if gameState[row] ~= nil and gameState[row][col-1] ~= nil and tileData["color"] == gameState[row][col-1]["color"] and not inSameList(tileData, gameState[row][col-1]) then
+		pprint("Error: left not in list")
+		printNode = true
+	end
+
+	if gameState[row+1] ~= nil and gameState[row+1][col] ~= nil and tileData["color"] == gameState[row+1][col]["color"] and not inSameList(tileData, gameState[row+1][col]) then
+		pprint("Error: down not in list")
+		printNode = true
+	end
+
+	if gameState[row-1] ~= nil and gameState[row-1][col] ~= nil and tileData["color"] == gameState[row-1][col]["color"] and not inSameList(tileData, gameState[row-1][col]) then
+		pprint("Error: up not in list")
+		printNode = true
+	end
+
+	if printNode then
+		pprint(tileData)
+	end
 end
 
 local function spawnRow(self, tile)
@@ -224,15 +266,27 @@ local function spawnRow(self, tile)
 
 	else
 		for colNum, pos in ipairs(rowPos) do
-			pos['y'] = tile + 64
+			pos['y'] = tile + tileHeight
 			generateTile(self, pos)
 		end
 
+		for i = 2, #gameState, 1 do
+			for key, value in pairs(gameState[i]) do
+				value["rowNum"] = value["rowNum"]+1
+			end
+		end
+
+
+		
 		isGameOver()
 	end
+
+	
 end
 
-local function findTile(row)
+
+
+local function findTile_Row(row)
 	local tile = nil
 	for key, value in pairs(row) do 
 		if value ~= nil then
@@ -243,6 +297,20 @@ local function findTile(row)
 	return tile
 end
 
+local function printTileNames()
+
+	local list = {}
+	for key, value in pairs(gameState) do
+		table.insert(list, {})
+		for k, v in pairs(value) do
+			table.insert(list[key], v["tile"])
+		end
+	end
+
+	pprint(list)
+end
+
+
 local function GamePlaying(self, dt)
 	-- Add update code here
 	-- Learn more: https://defold.com/manuals/script/
@@ -252,10 +320,18 @@ local function GamePlaying(self, dt)
 	
 	if timePassed >= moveDownTime then
 		timePassed = 0
+
+		
+		--printTileNames()
 		
 		for rowNum, row in ipairs(gameState) do
 
 			for tileNum, tile in pairs(row) do
+
+				if tile ==  nil then
+					pprint(rowNum, tileNum)
+				end
+				
 				local pos = go.get_position(tile["tile"])
 				pos = pos - (vmath.vector3(0,1,0) * speed) * dt
 				go.set_position(pos, tile["tile"])
@@ -264,7 +340,7 @@ local function GamePlaying(self, dt)
 
 		-- Check if first row
 
-		local tilePos = go.get_position(findTile(gameState[1])["tile"])['y']
+		local tilePos = go.get_position(findTile_Row(gameState[1])["tile"])['y']
 		if tilePos <= spawnHeight then
 			spawnRow(self, tilePos)
 		end
@@ -289,17 +365,119 @@ local function SpeedUp(self, message_id, message, sender)
 end
 
 local function deleteDirection(node, direction)
+	local colAffected = {}
+
 	if node[direction] ~= nil then
-		deleteDirection(node[direction], direction)
+		colAffected = deleteDirection(node[direction], direction)
 	end
 
-	for key, value in pairs(node["row"]) do
-		if value["tile"] == node["tile"] then
-			go.delete(node["tile"])
-			table.remove(node["row"], key)
-			break
+
+	go.delete(node["tile"])
+	--pprint(node)
+
+	if node == nil or node["colNum"] == nil or node["rowNum"] == nil then
+		pprint(node)
+		pprint(node["colNum"])
+		pprint(node["rowNum"])
+	end
+	
+	gameState[node["rowNum"]][node["colNum"]] = nil
+
+	if colAffected[node["colNum"]] == nil or colAffected[node["colNum"]] > node["rowNum"] then
+		colAffected[node["colNum"]] = node["rowNum"]
+	end
+
+	return colAffected
+end
+
+local function findNil(col, startIndex)
+	for RowNumber = startIndex, #gameState, 1 do
+		if gameState[RowNumber][col] == nil then
+			return RowNumber
 		end
 	end
+
+	return nil
+end
+
+local function findTile_Col(col, startIndex)
+	for RowNumber = startIndex, #gameState, 1 do
+		if gameState[RowNumber][col] ~= nil then
+			return RowNumber
+		end
+	end
+
+	return nil
+	
+end
+
+local function adjustColumn(colnum, rownum)
+	local changedTiles = {}
+
+	for i = rownum, #gameState, 1 do
+		local tileIndex = findTile_Col(colnum, i)
+		if tileIndex == nil then
+			break
+		else
+			gameState[i][colnum] = gameState[tileIndex][colnum]
+			gameState[tileIndex][colnum] = nil
+			table.insert(changedTiles, {tileIndex, colnum})
+			local change = tileIndex - i;
+
+			local tile = gameState[i][colnum]["tile"]
+			local pos = go.get_position(tile)
+			pos["y"]=(tileHeight * change) + go.get_position(tile)["y"]
+			go.set_position(pos, tile)
+			gameState[i][colnum]["rowNum"] = i
+			gameState[i][colnum]["colNum"] = colnum
+		end
+	end
+
+
+	
+
+	if #changedTiles == 0 then
+		changedTiles = nil
+	end
+	
+	return changedTiles
+end
+
+local function ClearTiles(grabbed)
+	local colAffected={}
+	if grabbed["prev"] ~= nil then
+		colAffected = deleteDirection(grabbed["prev"], "prev")
+	end
+
+	for col, rowNum in pairs(deleteDirection(grabbed, "next")) do
+		if colAffected[col] == nil or colAffected[col] > rowNum then
+			colAffected[col] = rowNum
+		end
+	end
+
+	local change={}
+	for colnum, rownum in pairs(colAffected) do
+		local tmp =  adjustColumn(colnum, rownum)
+		table.insert(change, tmp)
+	end
+
+	for i = #gameState, 1, -1 do
+		checkEmpty(i)	
+	end
+
+	-- Count the colors of the changed tiles to see if there is any other matching pairs. 
+	for key, coords_T in ipairs(change) do
+		for key, coords in ipairs(coords_T) do
+
+			if gameState[coords[1]] ~= nil then
+				local tileData = gameState[coords[1]][coords[2]]
+				if tileData ~= nil and countColor(tileData) > minTileMatch then
+					ClearTiles(tileData)
+				end
+			end
+		end
+	end
+	
 end
 
 local function Grab(self, message_id, message, sender)
@@ -329,16 +507,17 @@ local function Grab(self, message_id, message, sender)
 			checkEmpty(tileTable[1])
 		end
 	else
+		msg.post(sender, "Grabbed Tile", {nil})
 		local newPos = rowPos[playerPos]
 		if tileTable == nil then
 			-- Column is cleared.  Find a tile on the first row.
 			-- 		Should always be a tile on the first row.  Since new row should be spawned if board is cleared.
 			
-			tileTable = {1, findTile(gameState[1])}
+			tileTable = {1, findTile_Row(gameState[1])}
 			newPos['y'] = go.get_position(tileTable[2]["tile"])['y']
 		else
 			local pos = go.get_position(tileTable[2]["tile"])
-			newPos['y'] = pos['y'] - 64
+			newPos['y'] = pos['y'] - tileHeight
 			
 		end
 		
@@ -350,19 +529,27 @@ local function Grab(self, message_id, message, sender)
 			gameState[tileTable[1]+1] = {}
 		end
 		gameState[tileTable[1]+1][playerPos] = grabbed
-		gameState[tileTable[1]+1][playerPos]["row"] = gameState[tileTable[1]+1]
+		gameState[tileTable[1]+1][playerPos]["rowNum"] = tileTable[1]+1
+		gameState[tileTable[1]+1][playerPos]["colNum"] = playerPos
 		ConnectTile(tileTable[1]+1, playerPos)
-		if countColor(grabbed) > 3 then
-			if grabbed["prev"] ~= nil then
-				deleteDirection(grabbed["prev"], "prev")
-			end
 
-			deleteDirection(grabbed, "next")
+
+	
+		checkConnections(gameState[tileTable[1]+1][playerPos])
+
+		
+		if countColor(grabbed) > minTileMatch then
+
+			ClearTiles(grabbed)
+			
 		end
 
-		msg.post(sender, "Grabbed Tile", {nil})
+
 		
 	end 
+
+
+
 end
 
 
