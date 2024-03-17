@@ -29,6 +29,49 @@ local function isGameOver()
 	end
 end
 
+local function isTileValid(row, col)
+	return gameState[row] ~= nil and gameState[row][col] ~= nil
+end
+
+
+local function compareTiles(row, col, tileData, searched)
+	if isTileValid(row, col) and gameState[row][col]["color"] == tileData["color"] then
+		for i = 1, #searched, 1 do
+			if searched[i]["tile"] == gameState[row][col]["tile"] then
+				return nil
+			end
+		end	
+
+		return gameState[row][col]
+	end
+
+	return nil
+end
+
+
+
+local function countColor(tileData)
+
+	local foundColors = {tileData}
+	local searched = {}
+	pprint(gameState)
+	repeat
+		local t = table.remove(foundColors)
+		table.insert(searched, t)
+
+		local row = t["RowNum"]
+		local col = t["ColNum"]
+
+		table.insert(foundColors, compareTiles(row+1, col, t, searched))
+		table.insert(foundColors, compareTiles(row-1, col, t, searched))
+		table.insert(foundColors, compareTiles(row, col+1, t, searched))
+		table.insert(foundColors, compareTiles(row, col-1, t, searched))
+	until(#foundColors == 0)
+
+	return searched
+
+end
+
 local function checkEmpty(rowNumber)
 	if tablelength(gameState[rowNumber]) == 0 then
 		table.remove(gameState, rowNumber)
@@ -46,149 +89,27 @@ local function shuffle(colors)
 	return shuffledTable
 end
 
-local function NewColor (colors, tile)
-	local color = table.remove(colors)
-	msg.post(tile .. "#tileSprite", "play_animation", {id = hash(color)})
-end
-
-
-local function countNext(data, nextCount, dataName)
-	if data[dataName] ~= nil then
-		nextCount = countNext(data[dataName], nextCount + 1, dataName)
-	end
-	return nextCount
-end
-
-local function countColor(data)
-
-	return countNext(data, 0, "next") + countNext(data, 0, "prev") + 1
-
-end
-
-local function verifyTile(col, row)
-	
-	return gameState[row] ~= nil and gameState[row][col] ~= nil
-end
-
-local function insertTile(NewTile, otherTile)
-	NewTile["next"] = otherTile
-	NewTile["prev"] = otherTile["prev"]
-	otherTile["prev"] = NewTile
-end
-
-
-local function DisconnectTile(row, col)
-	local tileData = gameState[row][col]
-
-	if tileData["next"] ~= nil then
-		tileData["next"]["prev"] = tileData["prev"]
-	end
-
-	if tileData["prev"] ~= nil then
-		tileData["prev"]["next"] = tileData["next"]
-	end
-
-	tileData["next"] = nil
-	tileData["prev"] = nil
-end
-
-local function goToEnd(tileData, direction)
-	local endData = tileData;
-	if tileData[direction] ~= nil then
-		endData = goToEnd(tileData[direction])
-	end
-
-	return endData
-end
-
-
-local function isInHead(tileA, tileB, direction)
-	local found = false;
-
-	if tileA["tile"] == tileB["tile"] then
-		found = true
-	elseif tileA[direction] ~= nil then
-		found = isInHead(tileA[direction], tileB, direction)
-	end
-
-	return found
-		
-end
-
-local function inSameList(tileA, tileB)
-	local found = isInHead(tileA, tileB, "next")
-	if not found then
-		found = isInHead(tileA, tileB, "prev")
-	end
-
-	return found
-end
-
-local function CombineList(listA, listB)
-	if not inSameList(listA, listB) then
-		local tail = goToEnd(listA, "next")
-		local head = goToEnd(listB, "prev")
-
-		head["prev"] = tail
-		tail["next"] = head
-
-		return true	
-	end
-
-	return false
-end
-
-local function ConnectTile(row, col)
-	local tileData = gameState[row][col]
-	validTiles = {}
-
-	
-	if gameState[row-1] ~= nil and gameState[row-1][col] ~= nil and gameState[row-1][col]["color"] == tileData["color"] then
-		table.insert(validTiles, gameState[row-1][col])
-	end
-
-	if gameState[row+1] ~= nil and gameState[row+1][col] ~= nil and gameState[row+1][col]["color"] == tileData["color"] then
-		table.insert(validTiles, gameState[row+1][col])
-	end
-
-	if gameState[row][col-1] ~= nil and gameState[row][col-1]["color"] == tileData["color"] then
-		table.insert(validTiles, gameState[row][col-1])
-	end
-
-	if gameState[row][col+1] ~= nil and gameState[row][col+1]["color"] == tileData["color"] then
-		table.insert(validTiles, gameState[row][col+1])
-	end
-
-	table.insert(validTiles, tileData)
-
-	for i = 1, #validTiles - 1, 1 do
-		CombineList(validTiles[i], validTiles[i+1])
-	end
-
-end
-
 
 
 -- Collect the sum of all adjacent colors and return all colors that would not complete the color combo
 
 local function validColors()
-	local leftTile = gameState[1][#gameState[1] - 1]
+	local tileData = gameState[1][#gameState[1]]
 	local sumColors = {BlueTile = 0, GreenTile = 0, PurpleTile = 0, RedTile = 0, YellowTile = 0}
 
-	if leftTile then
-		sumColors[leftTile["color"]] = sumColors[leftTile["color"]] + countColor(leftTile)	
+	for key, value in pairs(gameState[1]) do
+		pprint(value["color"])
 	end
-	if gameState[2] ~= nil and gameState[2][#gameState[1]] then
-		local belowTile = gameState[2][#gameState[1]]
-
-		if belowTile then
-			sumColors[belowTile["color"]] = sumColors[belowTile["color"]] + countColor(belowTile)	
-		end
-	end	
+	
+	for color, count in pairs(sumColors) do
+		tileData["color"] = color
+		sumColors[color] = #countColor(tileData)
+	end
+	
 
 	local included = {}
 	for color, sum in pairs(sumColors) do
-		if sum < 2 then
+		if sum < 4 then
 			table.insert(included, color)
 		end
 	end
@@ -198,16 +119,13 @@ end
 
 local function generateTile(self, pos)
 	local tile = factory.create(tileFactory, pos)
-	table.insert(gameState[1], {tile = tile, row = gameState[1]})
+	table.insert(gameState[1], {tile = tile, RowNum = 1, ColNum = #gameState[1]+1 })
 	
 	local colors = shuffle(validColors())
 	local color = table.remove(colors)
 	gameState[1][#gameState[1]]["color"] = color
 	msg.post(tile, "play_animation", {id = hash(color)})
 	--countConnecting({#gameState[1], 1})
-
-	ConnectTile(1, #gameState[1])
-	
 	
 end
 
@@ -229,6 +147,13 @@ local function spawnRow(self, tile)
 		end
 
 		isGameOver()
+	end
+
+	for rowNum = 2, #gameState, 1 do
+		for colNum, tileData in pairs(gameState[rowNum]) do
+			tileData["RowNum"] = rowNum
+			tileData["ColNum"] = colNum
+		end
 	end
 end
 
@@ -288,20 +213,6 @@ local function SpeedUp(self, message_id, message, sender)
 	end
 end
 
-local function deleteDirection(node, direction)
-	if node[direction] ~= nil then
-		deleteDirection(node[direction], direction)
-	end
-
-	for key, value in pairs(node["row"]) do
-		if value["tile"] == node["tile"] then
-			go.delete(node["tile"])
-			table.remove(node["row"], key)
-			break
-		end
-	end
-end
-
 local function Grab(self, message_id, message, sender)
 
 	-- message = {playerPos, action, held TileID}
@@ -322,10 +233,11 @@ local function Grab(self, message_id, message, sender)
 	
 	if held == nil then
 		if tileTable ~= nil then
-			DisconnectTile(tileTable[1], playerPos)
 			grabbed = tileTable[2]
 			msg.post(sender, "Grabbed Tile", {tileTable[2]["tile"]})
 			gameState[tileTable[1]][playerPos] = nil
+			grabbed["ColNum"] = nil
+			grabbed["RowNum"] = nil
 			checkEmpty(tileTable[1])
 		end
 	else
@@ -334,7 +246,7 @@ local function Grab(self, message_id, message, sender)
 			-- Column is cleared.  Find a tile on the first row.
 			-- 		Should always be a tile on the first row.  Since new row should be spawned if board is cleared.
 			
-			tileTable = {1, findTile(gameState[1])}
+			tileTable = {0, findTile(gameState[1])}
 			newPos['y'] = go.get_position(tileTable[2]["tile"])['y']
 		else
 			local pos = go.get_position(tileTable[2]["tile"])
@@ -350,14 +262,20 @@ local function Grab(self, message_id, message, sender)
 			gameState[tileTable[1]+1] = {}
 		end
 		gameState[tileTable[1]+1][playerPos] = grabbed
-		gameState[tileTable[1]+1][playerPos]["row"] = gameState[tileTable[1]+1]
-		ConnectTile(tileTable[1]+1, playerPos)
-		if countColor(grabbed) > 3 then
-			if grabbed["prev"] ~= nil then
-				deleteDirection(grabbed["prev"], "prev")
+		gameState[tileTable[1]+1][playerPos]["ColNum"] = playerPos
+		gameState[tileTable[1]+1][playerPos]["RowNum"] = tileTable[1]+1
+
+		local matchingTiles = countColor(grabbed)
+		if #matchingTiles > 3 then
+
+			for key = #matchingTiles, 1, -1 do
+				go.delete(matchingTiles[key]["tile"])
+				gameState[matchingTiles[key]["RowNum"]][matchingTiles[key]["ColNum"]] = nil
 			end
 
-			deleteDirection(grabbed, "next")
+			for rowNumber, row in ipairs(gameState) do
+				checkEmpty(rowNumber)
+			end
 		end
 
 		msg.post(sender, "Grabbed Tile", {nil})
