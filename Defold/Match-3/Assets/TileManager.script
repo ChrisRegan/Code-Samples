@@ -62,10 +62,10 @@ local function countColor(tileData)
 		local row = t["RowNum"]
 		local col = t["ColNum"]
 
-		table.insert(foundColors, compareTiles(row+1, col, t, searched))
-		table.insert(foundColors, compareTiles(row-1, col, t, searched))
-		table.insert(foundColors, compareTiles(row, col+1, t, searched))
-		table.insert(foundColors, compareTiles(row, col-1, t, searched))
+		table.insert(foundColors, compareTiles(row+1, col, t, searched)) -- below
+		table.insert(foundColors, compareTiles(row-1, col, t, searched)) -- above
+		table.insert(foundColors, compareTiles(row, col+1, t, searched)) -- right
+		table.insert(foundColors, compareTiles(row, col-1, t, searched)) -- left
 	until(#foundColors == 0)
 
 	return searched
@@ -95,7 +95,7 @@ end
 
 local function validColors()
 	local tileData = gameState[1][#gameState[1]]
-	local sumColors = {BlueTile = 0, GreenTile = 0, PurpleTile = 0, RedTile = 0, YellowTile = 0}
+	local sumColors = {RedTile = 0, YellowTile = 0}
 
 	
 	for color, count in pairs(sumColors) do
@@ -111,6 +111,7 @@ local function validColors()
 		end
 	end
 
+	pprint(included)
 	return included
 end
 
@@ -129,7 +130,13 @@ end
 local function spawnRow(self, tile)
 	local row={}
 	table.insert(gameState, 1, row)
-	
+	for rowNum = 2, #gameState, 1 do
+		for colNum, tileData in pairs(gameState[rowNum]) do
+			tileData["RowNum"] = rowNum
+			tileData["ColNum"] = colNum
+		end
+	end
+	pprint("---")
 	if gameState[2] == nil then
 
 		for colNum, pos in ipairs(rowPos) do
@@ -146,12 +153,7 @@ local function spawnRow(self, tile)
 		isGameOver()
 	end
 
-	for rowNum = 2, #gameState, 1 do
-		for colNum, tileData in pairs(gameState[rowNum]) do
-			tileData["RowNum"] = rowNum
-			tileData["ColNum"] = colNum
-		end
-	end
+
 end
 
 local function findTile(row)
