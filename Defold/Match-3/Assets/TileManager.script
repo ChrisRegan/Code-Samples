@@ -95,7 +95,7 @@ end
 
 local function validColors()
 	local tileData = gameState[1][#gameState[1]]
-	local sumColors = {RedTile = 0, YellowTile = 0}
+	local sumColors = {RedTile = 0, YellowTile = 0, BlueTile = 0, GreenTile = 0, PurpleTile = 0}
 
 	
 	for color, count in pairs(sumColors) do
@@ -165,6 +165,51 @@ local function findTile(row)
 		end
 	end
 	return tile
+end
+
+local function collectTiles(tData)
+	local matchingTiles = countColor(tData)
+	if #matchingTiles > 3 then
+
+		for key = #matchingTiles, 1, -1 do
+			go.delete(matchingTiles[key]["tile"])
+			gameState[matchingTiles[key]["RowNum"]][matchingTiles[key]["ColNum"]] = nil
+		end
+
+		for rowNumber, row in ipairs(gameState) do
+			checkEmpty(rowNumber)
+		end
+
+		local changed = {}
+		
+		for colNum, pos in ipairs(rowPos) do
+			for rowNum, row in ipairs(gameState) do
+				if row[colNum] == nil then
+					for i = rowNum, #gameState, 1 do
+						if gameState[i][colNum] ~= nil then
+							gameState[rowNum][colNum] = gameState[i][colNum]
+							gameState[i][colNum] = nil
+							table.insert(changed, gameState[rowNum][colNum])
+							break
+
+						end
+					end
+				end
+
+				if gameState[rowNum][colNum] ~= nil then
+					gameState[rowNum][colNum]["ColNum"] = colNum
+					local pos = go.get_position(gameState[rowNum][colNum]["tile"])
+					pos["y"] = pos["y"] + ((gameState[rowNum][colNum]["RowNum"] - rowNum) * tileHeight)
+					gameState[rowNum][colNum]["RowNum"] = rowNum
+					go.set_position(pos, gameState[rowNum][colNum]["tile"])
+				end
+			end
+		end
+
+		for key, tileData in ipairs(changed) do
+			collectTiles(tileData)
+		end
+	end
 end
 
 local function GamePlaying(self, dt)
@@ -264,41 +309,7 @@ local function Grab(self, message_id, message, sender)
 		gameState[tileTable[1]+1][playerPos]["ColNum"] = playerPos
 		gameState[tileTable[1]+1][playerPos]["RowNum"] = tileTable[1]+1
 
-		local matchingTiles = countColor(grabbed)
-		if #matchingTiles > 3 then
-
-			for key = #matchingTiles, 1, -1 do
-				go.delete(matchingTiles[key]["tile"])
-				gameState[matchingTiles[key]["RowNum"]][matchingTiles[key]["ColNum"]] = nil
-			end
-
-			for rowNumber, row in ipairs(gameState) do
-				checkEmpty(rowNumber)
-			end
-
-			for colNum, pos in ipairs(rowPos) do
-				for rowNum, row in ipairs(gameState) do
-					if row[colNum] == nil then
-						for i = rowNum, #gameState, 1 do
-							if gameState[i][colNum] ~= nil then
-								gameState[rowNum][colNum] = gameState[i][colNum]
-								gameState[i][colNum] = nil
-								break
-								
-							end
-						end
-					end
-
-					if gameState[rowNum][colNum] ~= nil then
-						gameState[rowNum][colNum]["ColNum"] = colNum
-						local pos = go.get_position(gameState[rowNum][colNum]["tile"])
-						pos["y"] = pos["y"] + ((gameState[rowNum][colNum]["RowNum"] - rowNum) * tileHeight)
-						gameState[rowNum][colNum]["RowNum"] = rowNum
-						go.set_position(pos, gameState[rowNum][colNum]["tile"])
-					end
-				end
-			end
-		end
+		collectTiles(grabbed)
 
 		msg.post(sender, "Grabbed Tile", {nil})
 		
