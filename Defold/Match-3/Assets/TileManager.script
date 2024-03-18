@@ -19,8 +19,8 @@ local const_MoveDownTime = 0.6 -- Constant value to ensure that the base value c
 -- 2.6 4th beat of 100 bpm
 local grabbed = nil
 
-
-
+local tileHeight = 64
+local collect = 4 -- min matches to collect the tiles
 local messages = {}
 
 local function isGameOver()
@@ -54,7 +54,7 @@ local function countColor(tileData)
 
 	local foundColors = {tileData}
 	local searched = {}
-	pprint(gameState)
+	--pprint(gameState)
 	repeat
 		local t = table.remove(foundColors)
 		table.insert(searched, t)
@@ -97,9 +97,6 @@ local function validColors()
 	local tileData = gameState[1][#gameState[1]]
 	local sumColors = {BlueTile = 0, GreenTile = 0, PurpleTile = 0, RedTile = 0, YellowTile = 0}
 
-	for key, value in pairs(gameState[1]) do
-		pprint(value["color"])
-	end
 	
 	for color, count in pairs(sumColors) do
 		tileData["color"] = color
@@ -109,7 +106,7 @@ local function validColors()
 
 	local included = {}
 	for color, sum in pairs(sumColors) do
-		if sum < 4 then
+		if sum < collect - 1 then
 			table.insert(included, color)
 		end
 	end
@@ -142,7 +139,7 @@ local function spawnRow(self, tile)
 
 	else
 		for colNum, pos in ipairs(rowPos) do
-			pos['y'] = tile + 64
+			pos['y'] = tile + tileHeight
 			generateTile(self, pos)
 		end
 
@@ -250,7 +247,7 @@ local function Grab(self, message_id, message, sender)
 			newPos['y'] = go.get_position(tileTable[2]["tile"])['y']
 		else
 			local pos = go.get_position(tileTable[2]["tile"])
-			newPos['y'] = pos['y'] - 64
+			newPos['y'] = pos['y'] - tileHeight
 			
 		end
 		
@@ -275,6 +272,29 @@ local function Grab(self, message_id, message, sender)
 
 			for rowNumber, row in ipairs(gameState) do
 				checkEmpty(rowNumber)
+			end
+
+			for colNum, pos in ipairs(rowPos) do
+				for rowNum, row in ipairs(gameState) do
+					if row[colNum] == nil then
+						for i = rowNum, #gameState, 1 do
+							if gameState[i][colNum] ~= nil then
+								gameState[rowNum][colNum] = gameState[i][colNum]
+								gameState[i][colNum] = nil
+								break
+								
+							end
+						end
+					end
+
+					if gameState[rowNum][colNum] ~= nil then
+						gameState[rowNum][colNum]["ColNum"] = colNum
+						local pos = go.get_position(gameState[rowNum][colNum]["tile"])
+						pos["y"] = pos["y"] + ((gameState[rowNum][colNum]["RowNum"] - rowNum) * tileHeight)
+						gameState[rowNum][colNum]["RowNum"] = rowNum
+						go.set_position(pos, gameState[rowNum][colNum]["tile"])
+					end
+				end
 			end
 		end
 
