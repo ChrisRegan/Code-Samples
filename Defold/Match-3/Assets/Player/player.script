@@ -7,17 +7,24 @@ local actionsReleased={}
 local updateGrabbed = function() end
 local held = nil
 
+
+local function Move()
+	-- move left
+	local pos = go.get_position()
+	pos.x = xPos[currentPos]
+	go.set_position(pos)
+	updateGrabbed()
+end
+
 local function MoveLeft()
 	if currentPos == 1 then
 		return
 	end
 
 	currentPos = currentPos - 1 
-	-- move left
-	local pos = go.get_position()
-	pos.x = xPos[currentPos]
-	go.set_position(pos)
-	updateGrabbed()
+
+	Move()
+
 end
 
 local function MoveRight()
@@ -27,10 +34,7 @@ local function MoveRight()
 
 	currentPos = currentPos + 1 
 	-- move right
-	local pos = go.get_position()
-	pos.x = xPos[currentPos]
-	go.set_position(pos)
-	updateGrabbed()
+	Move()
 end
 
 local function other(self, action_id, action)
@@ -48,31 +52,10 @@ function init(self)
 	actionsPressed[hash("MoveLeft")] = MoveLeft
 	actionsPressed[hash("MoveRight")] = MoveRight
 	actionsPressed[hash("SpeedUp")] = other
-	actionsPressed[hash("Swap")] = other
+	--actionsPressed[hash("Swap")] = other
 	actionsPressed[hash("Grab")] = other
 	actionsReleased[hash("SpeedUp")] = other
 
-end
-
-function final(self)
-	-- Add finalization code here
-	-- Learn more: https://defold.com/manuals/script/
-	-- Remove this function if not needed
-end
-
-function update(self, dt)
-	-- Add update code here
-	-- Learn more: https://defold.com/manuals/script/
-	-- Remove this function if not needed
-end
-
-function fixed_update(self, dt)
-	-- This function is called if 'Fixed Update Frequency' is enabled in the Engine section of game.project
-	-- Can be coupled with fixed updates of the physics simulation if 'Use Fixed Timestep' is enabled in
-	-- Physics section of game.project
-	-- Add update code here
-	-- Learn more: https://defold.com/manuals/script/
-	-- Remove this function if not needed
 end
 
 function on_message(self, message_id, message, sender)
@@ -80,7 +63,9 @@ function on_message(self, message_id, message, sender)
 	-- Learn more: https://defold.com/manuals/message-passing/
 	-- Remove this function if not needed
 
-	if message_id == hash("Grabbed Tile") then
+	if message_id == hash("GameOver") then
+		msg.post(".", "release_input_focus")
+	elseif message_id == hash("Grabbed Tile") then
 		held = message[1]
 		if held == nil then
 			updateGrabbed = function() end

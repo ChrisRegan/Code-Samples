@@ -1,41 +1,35 @@
-local tileFactory = "#TileFactory"
-local rowPos = {
-	vmath.vector3(103,611, 1),
-	vmath.vector3(167,611, 1),
-	vmath.vector3(231,611, 1),
-	vmath.vector3(295,611, 1),
-	vmath.vector3(359,611, 1),
-	vmath.vector3(423,611, 1)
+local rowPos = {	-- table of Spawn position of each column for the row
+	vmath.vector3(103,611, 0.8),
+	vmath.vector3(167,611, 0.8),
+	vmath.vector3(231,611, 0.8),
+	vmath.vector3(295,611, 0.8),
+	vmath.vector3(359,611, 0.8),
+	vmath.vector3(423,611, 0.8)
 }
-local updateState=function()end
-local gameState={}
-local numberRows = 8
-local speed = 200.0  --Max speed 200
-local spawnHeight = 547
 
-local timePassed = 0
-local moveDownTime
-local const_MoveDownTime = 0.6 -- Constant value to ensure that the base value can be reset when needed
--- 2.6 4th beat of 100 bpm
-local grabbed = nil
+local updateState=function()end	-- call the correct update function.  Either a game over empty function, collectUpdate, or Gameplaying  
+local gameState={}		-- Tracks the current gameState by inserting a table for a row and in that table has the tile data
+local numberRows = 8	-- Max number of rows before the game ends
+local speed = 200.0  	-- distance the tiles move
+local spawnHeight = 547 -- The height the first row needs to be in order to spawn the next row.
 
-local tileHeight = 64
-local collect = 4 -- min matches to collect the tiles
-local messages = {}
+local timePassed = 0	-- tracks timePassed to move or clear the board of collected tiles
+local moveDownTime		-- the amount of time needed to pass to clear the collected tiles or to move the tiles down
+local const_MoveDownTime = 0.6	-- value to reset moveDown time if modified
 
-local function isGameOver()
-	if #gameState >= numberRows then
-		updateState = function()end
-	end
-end
+local tileHeight = 64	-- Height of the tile to be offset
+local collect = 4 		-- min matches to collect the tiles
+local collected = false -- Tracks which audio to play for the collection sfx
 
-local function isTileValid(row, col)
-	return gameState[row] ~= nil and gameState[row][col] ~= nil
-end
+local messages = {}		-- stores the functions by message_id. Cleans up the message function by making the key
+						-- the message_id as well as taking advantage of the table lookup to call the right function.
+
+local matchingTiles = {} -- Stores all the collected tile yet to be deleted.
+local grabbed = nil      -- holds the tiledata of the grabbed object
 
 
 local function compareTiles(row, col, tileData, searched)
-	if isTileValid(row, col) and gameState[row][col]["color"] == tileData["color"] then
+	if gameState[row] ~= nil and gameState[row][col] ~= nil and gameState[row][col]["color"] == tileData["color"] then
 		for i = 1, #searched, 1 do
 			if searched[i]["tile"] == gameState[row][col]["tile"] then
 				return nil
@@ -48,13 +42,10 @@ local function compareTiles(row, col, tileData, searched)
 	return nil
 end
 
-
-
 local function countColor(tileData)
-
 	local foundColors = {tileData}
 	local searched = {}
-	--pprint(gameState)
+
 	repeat
 		local t = table.remove(foundColors)
 		table.insert(searched, t)
@@ -69,13 +60,38 @@ local function countColor(tileData)
 	until(#foundColors == 0)
 
 	return searched
-
 end
 
-local function checkEmpty(rowNumber)
+local function tablelength(T)
+	local count = 0
+	for _ in pairs(T) do count = count + 1 end
+	return count
+end
+
+local function removeEmpty(rowNumber)
 	if tablelength(gameState[rowNumber]) == 0 then
 		table.remove(gameState, rowNumber)
 	end
+end
+
+-- Collect the sum of all adjacent colors and return all colors that would not complete the color combo
+local function validColors()
+	local tileData = gameState[1][#gameState[1]]
+	local sumColors = {RedTile = 0, YellowTile = 0, BlueTile = 0, GreenTile = 0, PurpleTile = 0}
+
+	for color, count in pairs(sumColors) do
+		tileData["color"] = color
+		sumColors[color] = #countColor(tileData)
+	end
+	
+	local included = {}
+	for color, sum in pairs(sumColors) do
+		if sum < collect - 1 then
+			table.insert(included, color)
+		end
+	end
+
+	return included
 end
 
 local function shuffle(colors)
@@ -89,42 +105,19 @@ local function shuffle(colors)
 	return shuffledTable
 end
 
-
-
--- Collect the sum of all adjacent colors and return all colors that would not complete the color combo
-
-local function validColors()
-	local tileData = gameState[1][#gameState[1]]
-	local sumColors = {RedTile = 0, YellowTile = 0, BlueTile = 0, GreenTile = 0, PurpleTile = 0}
-
-	
-	for color, count in pairs(sumColors) do
-		tileData["color"] = color
-		sumColors[color] = #countColor(tileData)
-	end
-	
-
-	local included = {}
-	for color, sum in pairs(sumColors) do
-		if sum < collect - 1 then
-			table.insert(included, color)
-		end
-	end
-
-	pprint(included)
-	return included
-end
-
 local function generateTile(self, pos)
-	local tile = factory.create(tileFactory, pos)
+	local tile = factory.create("#TileFactory", pos)
 	table.insert(gameState[1], {tile = tile, RowNum = 1, ColNum = #gameState[1]+1 })
 	
 	local colors = shuffle(validColors())
 	local color = table.remove(colors)
 	gameState[1][#gameState[1]]["color"] = color
-	msg.post(tile, "play_animation", {id = hash(color)})
-	--countConnecting({#gameState[1], 1})
-	
+
+	local tileSprite = msg.url(nil, tile, "tileSprite")
+	msg.post(tileSprite, "play_animation", {id = hash(color)})
+
+	local collectedSprite = msg.url(nil, tile, "collected")
+	msg.post(collectedSprite, "disable")	
 end
 
 local function spawnRow(self, tile)
@@ -136,12 +129,11 @@ local function spawnRow(self, tile)
 			tileData["ColNum"] = colNum
 		end
 	end
-	pprint("---")
+
 	if gameState[2] == nil then
 
 		for colNum, pos in ipairs(rowPos) do
 			generateTile(self, pos)
-			--table.insert(row, generateTile(pos, #row))
 		end
 
 	else
@@ -150,10 +142,11 @@ local function spawnRow(self, tile)
 			generateTile(self, pos)
 		end
 
-		isGameOver()
+		if #gameState >= numberRows then
+			updateState = function()end
+			msg.post("/Player#player", "GameOver")
+		end
 	end
-
-
 end
 
 local function findTile(row)
@@ -167,21 +160,50 @@ local function findTile(row)
 	return tile
 end
 
-local function collectTiles(tData)
-	local matchingTiles = countColor(tData)
-	if #matchingTiles > 3 then
 
-		for key = #matchingTiles, 1, -1 do
-			go.delete(matchingTiles[key]["tile"])
-			gameState[matchingTiles[key]["RowNum"]][matchingTiles[key]["ColNum"]] = nil
+--  One of the update functions that may change depending on collection and gameover
+local function GamePlaying(self, dt)
+	timePassed = timePassed + dt
+	
+	if timePassed >= moveDownTime then
+		timePassed = 0
+		
+		for rowNum, row in ipairs(gameState) do
+			for tileNum, tile in pairs(row) do
+				local pos = go.get_position(tile["tile"])
+				pos = pos - (vmath.vector3(0,1,0) * speed) * dt
+				go.set_position(pos, tile["tile"])
+			end
 		end
+		local tilePos = go.get_position(findTile(gameState[1])["tile"])['y']
+		if tilePos <= spawnHeight then
+			spawnRow(self, tilePos)
+		end
+	end
+end
+
+--  One of the update functions that may change depending on collection and gameover
+local function collectUpdate(self, dt)
+	timePassed = timePassed + dt
+
+	if timePassed >= moveDownTime then
+		timePassed = 0
+
+		repeat
+			local tdata = table.remove(matchingTiles)
+			if tdata == nil then
+				break
+			end
+			go.delete(tdata["tile"])
+			gameState[tdata["RowNum"]][tdata["ColNum"]] = nil
+		until(#matchingTiles == 0)
 
 		for rowNumber, row in ipairs(gameState) do
-			checkEmpty(rowNumber)
+			removeEmpty(rowNumber)
 		end
 
 		local changed = {}
-		
+
 		for colNum, pos in ipairs(rowPos) do
 			for rowNum, row in ipairs(gameState) do
 				if row[colNum] == nil then
@@ -209,43 +231,38 @@ local function collectTiles(tData)
 		for key, tileData in ipairs(changed) do
 			collectTiles(tileData)
 		end
+
+		if #matchingTiles < collect then
+			collected = false
+			updateState = GamePlaying
+		end
 	end
 end
 
-local function GamePlaying(self, dt)
-	-- Add update code here
-	-- Learn more: https://defold.com/manuals/script/
-	-- Remove this function if not needed
-
-	timePassed = timePassed + dt
-	
-	if timePassed >= moveDownTime then
+function collectTiles(tData)
+	local check = countColor(tData)
+	if #check > collect - 1 then
 		timePassed = 0
-		
-		for rowNum, row in ipairs(gameState) do
+		updateState = collectUpdate
 
-			for tileNum, tile in pairs(row) do
-				local pos = go.get_position(tile["tile"])
-				pos = pos - (vmath.vector3(0,1,0) * speed) * dt
-				go.set_position(pos, tile["tile"])
-			end
+		for key, tile in pairs(check) do
+			table.insert(matchingTiles, tile)
 		end
 
-		-- Check if first row
-
-		local tilePos = go.get_position(findTile(gameState[1])["tile"])['y']
-		if tilePos <= spawnHeight then
-			spawnRow(self, tilePos)
+		if not collected then
+			sound.play("/Game Field#collect")
+		else
+			sound.play("/Game Field#collect2")
+		end
+		
+		collected = true
+		
+		for key, tile in ipairs(matchingTiles) do
+			local collectedSprite = msg.url(nil, tile["tile"], "collected")
+			msg.post(collectedSprite, "enable")
 		end
 	end
 end
-
-function tablelength(T)
-	local count = 0
-	for _ in pairs(T) do count = count + 1 end
-	return count
-end
-
 
 local function SpeedUp(self, message_id, message, sender)
 	if message[2].pressed then
@@ -274,118 +291,80 @@ local function Grab(self, message_id, message, sender)
 		end
 	end
 	
-	
 	if held == nil then
+		-- if picking up the block
+		
 		if tileTable ~= nil then
+			for key, tiledata in ipairs(matchingTiles) do
+				if tileTable[2]["tile"] == tiledata["tile"] then
+					return
+				end
+			end
+
+			sound.play("/Game Field#grabTile")
 			grabbed = tileTable[2]
 			msg.post(sender, "Grabbed Tile", {tileTable[2]["tile"]})
 			gameState[tileTable[1]][playerPos] = nil
 			grabbed["ColNum"] = nil
 			grabbed["RowNum"] = nil
-			checkEmpty(tileTable[1])
+			removeEmpty(tileTable[1])
 		end
 	else
+		-- If releaseing the grabbed block
+		
 		local newPos = rowPos[playerPos]
 		if tileTable == nil then
-			-- Column is cleared.  Find a tile on the first row.
-			-- 		Should always be a tile on the first row.  Since new row should be spawned if board is cleared.
-			
 			tileTable = {0, findTile(gameState[1])}
-			newPos['y'] = go.get_position(tileTable[2]["tile"])['y']
+			if tileTable[2] ~= nil then
+				newPos['y'] = go.get_position(tileTable[2]["tile"])['y']
+			else
+				newPos['y'] = rowPos[playerPos]
+			end
 		else
 			local pos = go.get_position(tileTable[2]["tile"])
 			newPos['y'] = pos['y'] - tileHeight
-			
 		end
 		
 		go.set_position(newPos, grabbed["tile"])
 
-
-
 		if gameState[tileTable[1]+1] == nil then
 			gameState[tileTable[1]+1] = {}
 		end
+		
 		gameState[tileTable[1]+1][playerPos] = grabbed
 		gameState[tileTable[1]+1][playerPos]["ColNum"] = playerPos
 		gameState[tileTable[1]+1][playerPos]["RowNum"] = tileTable[1]+1
-
+		sound.play("/Game Field#grabTile")
 		collectTiles(grabbed)
 
 		msg.post(sender, "Grabbed Tile", {nil})
-		
 	end 
 end
 
 
 function init(self)
-	-- Add initialization code here
-	-- Learn more: https://defold.com/manuals/script/
-	-- Remove this function if not needed
-	--self.spawnColorList = {"BlueTile", "GreenTile", "PurpleTile", "RedTile", "YellowTile"}
-
-	math.randomseed(tonumber(hash_to_hex(hash(tostring({}))):sub(4, 8), 16))
+	local tableAddr = tostring({})
+	local hashAddr = hash(tableAddr)
+	local toHex = hash_to_hex(hashAddr):sub(4, 8) -- grabs random portion of the hex.
+	local convertToInt = tonumber(toHex, 16)
+	math.randomseed(convertToInt)
+	
 	messages[hash("SpeedUp")] = SpeedUp
 	messages[hash("getStartPos")] = function(self, message_id, message, sender) msg.post(sender, "returned Positions", rowPos) end
 	messages[hash("Grab")] = Grab
-	
 	
 	moveDownTime = const_MoveDownTime
 	updateState = GamePlaying
 	spawnRow(self)
 end
 
-function final(self)
-	-- Add finalization code here
-	-- Learn more: https://defold.com/manuals/script/
-	-- Remove this function if not needed
-end
-
-
-
-
-function update(self, dt)
-
-end
-
 function fixed_update(self, dt)
-	-- This function is called if 'Fixed Update Frequency' is enabled in the Engine section of game.project
-	-- Can be coupled with fixed updates of the physics simulation if 'Use Fixed Timestep' is enabled in
-	-- Physics section of game.project
-	-- Add update code here
-	-- Learn more: https://defold.com/manuals/script/
-	-- Remove this function if not needed
-
 	updateState(self, dt)
 end
 
 function on_message(self, message_id, message, sender)
-	-- Add message-handling code here
-	-- Learn more: https://defold.com/manuals/message-passing/
-	-- Remove this function if not needed
-
 	if messages[message_id] ~= nil then
-
 		-- Message recieved from the player script.  Usually when the player requests an interaction with a tile.
 		messages[message_id](self, message_id, message, sender)
 	end
-end
-
-function on_input(self, action_id, action)
-	-- Add input-handling code here. The game object this script is attached to
-	-- must have acquired input focus:
-	--
-	--    msg.post(".", "acquire_input_focus")
-	--
-	-- All mapped input bindings will be received. Mouse and touch input will
-	-- be received regardless of where on the screen it happened.
-	-- Learn more: https://defold.com/manuals/input/
-	-- Remove this function if not needed
-
-
-end
-
-function on_reload(self)
-	-- Add reload-handling code here
-	-- Learn more: https://defold.com/manuals/hot-reload/
-	-- Remove this function if not needed
 end
