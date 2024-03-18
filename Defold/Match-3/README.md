@@ -6,13 +6,10 @@ At the bottom of the screen is the user player.
 
 A and D move the player left and right
 J grabs and drops the tile directly above the player.
-K swaps the adjacent blocks
-L rotates the cursor to swap horizontally or vertically
 
 To Do:
 
-    Scoreing system
+    Scoring system
     Block swapping 
-    Cursor
-    Cursor rotation
-    Tiles falling back next to the nearest block closest to the top of the screen.
+    Difficulty Increase
+
