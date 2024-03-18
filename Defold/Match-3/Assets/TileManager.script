@@ -1,3 +1,11 @@
+--[[
+
+This file manages the gameState as well as the tiles.  Had to combine the files as the message system runs too late to determine if
+the new row has 4 or more of the same color on the line.
+
+
+--]]
+
 local tileFactory = "#TileFactory"
 local rowPos = {
 	vmath.vector3(103,611, 1),
@@ -7,6 +15,7 @@ local rowPos = {
 	vmath.vector3(359,611, 1),
 	vmath.vector3(423,611, 1)
 }
+<<<<<<< Updated upstream
 local updateState=function()end
 local gameState={}
 local numberRows = 8
@@ -19,11 +28,27 @@ local const_MoveDownTime = 0.6 -- Constant value to ensure that the base value c
 -- 2.6 4th beat of 100 bpm
 local grabbed = nil
 local tileHeight = 64
+=======
+local updateState=function()end -- Manages the update loop to help prevent running unnecessary code in the update loop.
+>>>>>>> Stashed changes
 
 local minTileMatch = 3
 
+local gameState={} 				-- tracks the gameState by keeping track of the rows, filled with the tileData
+local numberRows = 8			-- Max number of rows until the game is over.
+local speed = 200.0 			-- Speed the tiles fall
+local spawnHeight = 547			-- Height needed to spawn the new row
 
-local messages = {}
+local timePassed = 0			-- used to keep track of the time until the blocks move down.
+local moveDownTime				-- varible that tracks when the tiles move down. may change based on the player input.
+local const_MoveDownTime = 0.6 	-- Normal time it takes to move the tiles down.  
+local grabbed = nil				-- Tile data of the tile that the player has grabbed used to reinsert back into the gameState \
+local capture = 4				-- Min number of tiles connected to clear from the board
+local tileHeight = 64
+
+local messages = {}				-- Stores the functions to be used by the message system by the message_id.  Initialized in the init function
+
+
 
 local function verifyColRow(tileData)
 	if tileData == nil then
@@ -47,12 +72,61 @@ local function isGameOver()
 	end
 end
 
+<<<<<<< Updated upstream
+=======
+local function isTileValid(row, col)
+	return gameState[row] ~= nil and gameState[row][col] ~= nil
+end
+
+
+-- Compares the desired tile against the row and column to see if the color matches.
+local function compareTiles(row, col, tileData, searched)
+	if isTileValid(row, col) and gameState[row][col]["color"] == tileData["color"] then
+		for i = 1, #searched, 1 do
+			if searched[i]["tile"] == gameState[row][col]["tile"] then
+				return nil
+			end
+		end	
+
+		return gameState[row][col]
+	end
+
+	return nil
+end
+
+
+
+local function countColor(tileData)
+
+	local foundColors = {tileData}
+	local searched = {}
+	repeat
+		local t = table.remove(foundColors)
+		table.insert(searched, t)
+
+		local row = t["RowNum"]
+		local col = t["ColNum"]
+
+		table.insert(foundColors, compareTiles(row+1, col, t, searched))
+		table.insert(foundColors, compareTiles(row-1, col, t, searched))
+		table.insert(foundColors, compareTiles(row, col+1, t, searched))
+		table.insert(foundColors, compareTiles(row, col-1, t, searched))
+	until(#foundColors == 0)
+
+	return searched
+
+end
+
+-- Removes the empty tables to ensure the game doesnt end early
+>>>>>>> Stashed changes
 local function checkEmpty(rowNumber)
 	if tablelength(gameState[rowNumber]) == 0 then
 		table.remove(gameState, rowNumber)
 	end
 end
 
+
+-- Used to shuffle the table of colors to randomize the new colors.
 local function shuffle(colors)
 	local shuffledTable = {}
 	while #colors > 0 do
@@ -64,6 +138,7 @@ local function shuffle(colors)
 	return shuffledTable
 end
 
+<<<<<<< Updated upstream
 local function NewColor (colors, tile)
 	local color = table.remove(colors)
 	msg.post(tile .. "#tileSprite", "play_animation", {id = hash(color)})
@@ -177,13 +252,26 @@ local function ConnectTile(row, col)
 
 end--]]
 
+=======
+local function findTile(row)
+	local tile = nil
+	for key, value in pairs(row) do 
+		if value ~= nil then
+			tile = value
+			break
+		end
+	end
+	return tile
+end
+>>>>>>> Stashed changes
 
 
--- Collect the sum of all adjacent colors and return all colors that would not complete the color combo
+-- Check against all the colors for the  new tile and return all colors that will not pass the minimum collect threshold.
 
 local function validColors()
 	local leftTile = gameState[1][#gameState[1] - 1]
 	local sumColors = {BlueTile = 0, GreenTile = 0, PurpleTile = 0, RedTile = 0, YellowTile = 0}
+<<<<<<< Updated upstream
 
 	if leftTile then
 		sumColors[leftTile["color"]] = sumColors[leftTile["color"]] + countColor(leftTile)	
@@ -199,6 +287,17 @@ local function validColors()
 	local included = {}
 	for color, sum in pairs(sumColors) do
 		if sum < 2 then
+=======
+	
+	for color, count in pairs(sumColors) do
+		tileData["color"] = color
+		sumColors[color] = #countColor(tileData)
+	end
+
+	local included = {}
+	for color, sum in pairs(sumColors) do
+		if sum < capture-1 then
+>>>>>>> Stashed changes
 			table.insert(included, color)
 		end
 	end
@@ -206,17 +305,28 @@ local function validColors()
 	return included
 end
 
+
+-- Initializes the tile data when spawned into the game.
 local function generateTile(self, pos)
 	local tile = factory.create(tileFactory, pos)
+<<<<<<< Updated upstream
 	table.insert(gameState[1], {tile = tile, rowNum = 1, colNum = #gameState[1]+1})
+=======
+
+	
+	table.insert(gameState[1], {tile = tile, RowNum = 1, ColNum = #gameState[1]+1 })
+>>>>>>> Stashed changes
 	
 	local colors = shuffle(validColors())
 	local color = table.remove(colors)
 	gameState[1][#gameState[1]]["color"] = color
 	msg.post(tile, "play_animation", {id = hash(color)})
+<<<<<<< Updated upstream
 	--countConnecting({#gameState[1], 1})
 
 --	ConnectTile(1, #gameState[1])
+=======
+>>>>>>> Stashed changes
 	
 	
 end
@@ -284,6 +394,7 @@ local function spawnRow(self, tile)
 	
 end
 
+<<<<<<< Updated upstream
 
 
 local function findTile_Row(row)
@@ -311,19 +422,24 @@ local function printTileNames()
 end
 
 
+=======
+>>>>>>> Stashed changes
 local function GamePlaying(self, dt)
 	-- Add update code here
 	-- Learn more: https://defold.com/manuals/script/
 	-- Remove this function if not needed
 
 	timePassed = timePassed + dt
-	
+
 	if timePassed >= moveDownTime then
 		timePassed = 0
 
+<<<<<<< Updated upstream
 		
 		--printTileNames()
 		
+=======
+>>>>>>> Stashed changes
 		for rowNum, row in ipairs(gameState) do
 
 			for tileNum, tile in pairs(row) do
@@ -338,14 +454,123 @@ local function GamePlaying(self, dt)
 			end
 		end
 
+<<<<<<< Updated upstream
 		-- Check if first row
 
 		local tilePos = go.get_position(findTile_Row(gameState[1])["tile"])['y']
+=======
+		--Check if the first row made it to the spawnHeight
+		local tilePos = go.get_position(findTile(gameState[1])["tile"])['y']
+>>>>>>> Stashed changes
 		if tilePos <= spawnHeight then
 			spawnRow(self, tilePos)
 		end
 	end
 end
+
+
+local function printGameState()
+	-- Debug print the current state of the game
+	pprint("-----")
+	for k, v in pairs(gameState) do
+		local colors={}
+
+		for key, value in pairs(v) do
+			colors[key] = value["color"]
+		end
+
+		pprint(colors)
+	end
+	pprint("-----")
+end
+
+local function captureTile(tData)
+
+	local matchingTiles = countColor(tData)
+	if #matchingTiles > capture-1 then
+
+
+		updateState = function(self,dt)pprint("hold")end
+
+		timePassed = 0
+		printGameState()
+
+
+		for key = #matchingTiles, 1, -1 do
+			go.delete(matchingTiles[key]["tile"])
+			gameState[matchingTiles[key]["RowNum"]][matchingTiles[key]["ColNum"]] = nil
+			msg.post(matchingTiles[key]["tile"], "disable")
+		end
+
+
+
+
+
+		--[[local lowest = {}
+
+		for key, tileData in pairs(matchingTiles) do
+			if lowest[tileData["ColNum"]] == nil or lowest[tileData["ColNum"]] > tileData["RowNum"] then
+				lowest[tileData["ColNum"]] = tileData["RowNum"]
+			end
+		end
+
+		local changed = {}
+
+		for colNum, rowNum in pairs(lowest) do
+			for i = rowNum+1, #gameState, 1 do
+				if gameState[i][colNum] ~= nil then
+
+					local t = gameState[i][colNum]
+					local pos = go.get_position(t["tile"])
+					pos["y"] = (i - rowNum) * tileHeight + pos["y"]
+					go.set_position(pos, t["tile"])
+
+					if gameState[rowNum][colNum] ~= nil then
+						pprint(gameState[rowNum][colNum])
+
+						printGameState()
+					end
+					
+	
+					gameState[rowNum][colNum] = gameState[i][colNum]
+					gameState[i][colNum] = nil
+
+					gameState[rowNum][colNum]["RowNum"] = rowNum
+
+					--table.insert(changed, gameState[rowNum][colNum])
+
+				end
+			end
+		end
+
+		pprint(changed)--]]
+
+
+	--[[	for key, tileData in ipairs(changed) do
+			captureTile(tileData)
+		end--]]
+
+
+		for rowNumber, row in ipairs(gameState) do
+			checkEmpty(rowNumber)
+		end
+
+		updateState = GamePlaying
+
+	end
+end
+
+local function moveUpTiles(self, dt)
+	timePassed = timePassed + dt
+
+	if timePassed >= moveDownTime then
+		timePassed = 0
+
+		
+	end
+end
+
+
 
 function tablelength(T)
 	local count = 0
@@ -533,6 +758,7 @@ local function Grab(self, message_id, message, sender)
 		gameState[tileTable[1]+1][playerPos]["colNum"] = playerPos
 		ConnectTile(tileTable[1]+1, playerPos)
 
+<<<<<<< Updated upstream
 
 	
 		checkConnections(gameState[tileTable[1]+1][playerPos])
@@ -543,6 +769,14 @@ local function Grab(self, message_id, message, sender)
 			ClearTiles(grabbed)
 			
 		end
+=======
+		--local matchingTiles = countColor(grabbed)
+		--if #matchingTiles > capture-1 then
+
+			captureTile(grabbed)
+
+		--end
+>>>>>>> Stashed changes
 
 
 		
@@ -580,7 +814,7 @@ end
 
 
 function update(self, dt)
-
+	updateState(self, dt)
 end
 
 function fixed_update(self, dt)
@@ -591,7 +825,7 @@ function fixed_update(self, dt)
 	-- Learn more: https://defold.com/manuals/script/
 	-- Remove this function if not needed
 
-	updateState(self, dt)
+
 end
 
 function on_message(self, message_id, message, sender)
