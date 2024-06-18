@@ -1,0 +1,10 @@
+
+*.txt
+*.txt
+*.meta
+*.bin
+/Unity/Fps/obj/Debug
+/Unity/Fps/Logs
+/Unity/Fps/Library/PackageCache
+*.pdb
+/Unity/Fps/Library
